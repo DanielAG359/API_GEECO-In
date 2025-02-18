@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+     context: .
+    container_name: reservesapi
+    restart: unless-stopped
+    ports:
+      - "443:443"  # HTTPS
+    environment:
+      - PORT=443
+    networks:
+      - internal
+    depends_on:
+      - mariadb
+
+  mariadb:
+    image: mariadb:latest
+    environment:
+      MYSQL_ROOT_PASSWORD: example
+      MYSQL_DATABASE: finances  # Asegúrate de que la base de datos esté configurada
+    networks:
+      - internal
+    ports:
+      - "3306:3306"
+
+networks:
+  internal:
+    name: internal
+    external: true
