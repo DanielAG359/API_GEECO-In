@@ -1,174 +1,110 @@
 from fastapi import FastAPI, HTTPException
-from db import get_db_connection
-from models import Ingreso, Despesa
+from pydantic import BaseModel
+import API.db as db
 
 app = FastAPI()
 
-# CRUD para Ingresos
+# Modelo Pydantic para los ingresos
+class Ingres(BaseModel):
+    titol: str
+    descripcio: str
+    quantitat: float
+    data: str  # Asumimos que la fecha está en formato YYYY-MM-DD
 
-# 1. Crear Ingreso (POST)
-@app.post("/ingressos/")
-def crear_ingreso(ingreso: Ingreso):
+# Función auxiliar para obtener una conexión a la base de datos
+def get_db_connection():
+    return db.get_db_connection()
+
+# Endpoint para crear un ingreso
+@app.post("/ingresos/")
+async def create_ingreso(ingreso: Ingres):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute(
-            "INSERT INTO ingressos (id, titol, descripcio, quantitat, data) VALUES (%s, %s, %s, %s, %s)",
-            (ingreso.id, ingreso.titol, ingreso.descripcio, ingreso.quantitat, ingreso.data),
-        )
+        query = "INSERT INTO ingressos (titol, descripcio, quantitat, data) VALUES (%s, %s, %s, %s)"
+        cursor.execute(query, (ingreso.titol, ingreso.descripcio, ingreso.quantitat, ingreso.data))
         conn.commit()
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()
         conn.close()
-    return {"message": "Ingreso creat correctament"}
+    return {"message": "Ingreso creado correctamente", "ingreso": ingreso}
 
-# 2. Obtenir Ingreso per ID (GET)
-@app.get("/ingressos/{id}")
-def obtenir_ingreso(id: int):
+# Endpoint para obtener todos los ingresos
+@app.get("/ingresos/")
+async def get_ingresos():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM ingressos WHERE id = %s", (id,))
-    ingreso = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    if not ingreso:
-        raise HTTPException(status_code=404, detail="Ingreso no trobat")
-    return ingreso
+    try:
+        query = "SELECT * FROM ingressos"
+        cursor.execute(query)
+        ingresos = cursor.fetchall()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+    return {"ingresos": ingresos}
 
-# 3. Obtenir tots els Ingressos (GET)
-@app.get("/ingressos/")
-def obtenir_tots_ingressos():
+# Endpoint para obtener un ingreso por ID (asumiendo que hay una columna 'id')
+@app.get("/ingresos/{ingreso_id}")
+async def get_ingreso(ingreso_id: int):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM ingressos")
-    ingressos = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return ingressos
+    try:
+        query = "SELECT * FROM ingressos WHERE id = %s"
+        cursor.execute(query, (ingreso_id,))
+        ingreso = cursor.fetchone()
+        if not ingreso:
+            raise HTTPException(status_code=404, detail="Ingreso no encontrado")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+    return {"ingreso": ingreso}
 
-# 4. Modificar Ingreso (PUT)
-@app.put("/ingressos/{id}")
-def modificar_ingreso(id: int, ingreso: Ingreso):
+# Endpoint para actualizar un ingreso por ID
+@app.put("/ingresos/{ingreso_id}")
+async def update_ingreso(ingreso_id: int, ingreso: Ingres):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute(
-            "UPDATE ingressos SET titol = %s, descripcio = %s, quantitat = %s, data = %s WHERE id = %s",
-            (ingreso.titol, ingreso.descripcio, ingreso.quantitat, ingreso.data, id),
-        )
+        query = "UPDATE ingressos SET titol = %s, descripcio = %s, quantitat = %s, data = %s WHERE id = %s"
+        cursor.execute(query, (ingreso.titol, ingreso.descripcio, ingreso.quantitat, ingreso.data, ingreso_id))
         conn.commit()
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Ingreso no trobat")
+            raise HTTPException(status_code=404, detail="Ingreso no encontrado")
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()
         conn.close()
-    return {"message": "Ingreso actualitzat correctament"}
+    return {"message": "Ingreso actualizado correctamente", "ingreso": ingreso}
 
-# 5. Eliminar Ingreso (DELETE)
-@app.delete("/ingressos/{id}")
-def eliminar_ingreso(id: int):
+# Endpoint para eliminar un ingreso por ID
+@app.delete("/ingresos/{ingreso_id}")
+async def delete_ingreso(ingreso_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("DELETE FROM ingressos WHERE id = %s", (id,))
+        query = "DELETE FROM ingressos WHERE id = %s"
+        cursor.execute(query, (ingreso_id,))
         conn.commit()
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Ingreso no trobat")
+            raise HTTPException(status_code=404, detail="Ingreso no encontrado")
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()
         conn.close()
-    return {"message": "Ingreso eliminat correctament"}
+    return {"message": "Ingreso eliminado correctamente"}
 
-
-# CRUD para Despesas
-
-# 1. Crear Despesa (POST)
-@app.post("/despeses/")
-def crear_despesa(despesa: Despesa):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            "INSERT INTO despeses (id, titol, descripcio, quantitat, data) VALUES (%s, %s, %s, %s, %s)",
-            (despesa.id, despesa.titol, despesa.descripcio, despesa.quantitat, despesa.data),
-        )
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        cursor.close()
-        conn.close()
-    return {"message": "Despesa creat correctament"}
-
-# 2. Obtenir Despesa per ID (GET)
-@app.get("/despeses/{id}")
-def obtenir_despesa(id: int):
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM despeses WHERE id = %s", (id,))
-    despesa = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    if not despesa:
-        raise HTTPException(status_code=404, detail="Despesa no trobada")
-    return despesa
-
-# 3. Obtenir totes les Despeses (GET)
-@app.get("/despeses/")
-def obtenir_totes_despeses():
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM despeses")
-    despeses = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return despeses
-
-# 4. Modificar Despesa (PUT)
-@app.put("/despeses/{id}")
-def modificar_despesa(id: int, despesa: Despesa):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            "UPDATE despeses SET titol = %s, descripcio = %s, quantitat = %s, data = %s WHERE id = %s",
-            (despesa.titol, despesa.descripcio, despesa.quantitat, despesa.data, id),
-        )
-        conn.commit()
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Despesa no trobada")
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        cursor.close()
-        conn.close()
-    return {"message": "Despesa actualitzada correctament"}
-
-# 5. Eliminar Despesa (DELETE)
-@app.delete("/despeses/{id}")
-def eliminar_despesa(id: int):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("DELETE FROM despeses WHERE id = %s", (id,))
-        conn.commit()
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Despesa no trobada")
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        cursor.close()
-        conn.close()
-    return {"message": "Despesa eliminada correctament"}
+# Endpoint de bienvenida
+@app.get("/")
+async def read_root():
+    return {"message": "Bienvenido a la API"}
