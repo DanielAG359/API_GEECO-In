@@ -1,31 +1,30 @@
 version: '3.8'
 
 services:
-  app:
-    build:
-     context: .
-    container_name: reservesapi
-    restart: unless-stopped
-    ports:
-      - "443:443"  # HTTPS
-    environment:
-      - PORT=443
-    networks:
-      - internal
-    depends_on:
-      - mariadb
-
   mariadb:
     image: mariadb:latest
+    container_name: api_geeco-in_mariadb_1
     environment:
-      MYSQL_ROOT_PASSWORD: example
-      MYSQL_DATABASE: finances  # Asegúrate de que la base de datos esté configurada
-    networks:
-      - internal
+      - MYSQL_ROOT_PASSWORD=root_password
+      - MYSQL_DATABASE=geeco_in_db
+      - MYSQL_USER=geeco_user
+      - MYSQL_PASSWORD=user_password
     ports:
-      - "3306:3306"
+      - "3306"  # Docker asignará un puerto dinámico
+    volumes:
+      - db_data:/var/lib/mysql
 
-networks:
-  internal:
-    name: internal
-    external: true
+  api:
+    build: .
+    container_name: api_geeco-in_fastapi_1
+    depends_on:
+      - mariadb
+    environment:
+      - DATABASE_URL=mysql+pymysql://geeco_user:user_password@mariadb/geeco_in_db
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+
+volumes:
+  db_data:
